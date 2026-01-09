@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Run: The Heist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #050505;
+            color: #e0e0e0;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        .cyber-grid {
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .cell {
+            transition: all 0.2s ease;
+        }
+
+        .glow-text {
+            text-shadow: 0 0 5px currentColor;
+        }
+
+        .hacker-theme {
+            --primary: #00ff88;
+            --secondary: #003311;
+        }
+
+        .corp-theme {
+            --primary: #ff3333;
+            --secondary: #330000;
+        }
+
+        /* Scanline effect */
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 10;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Animations */
+        @keyframes pulse-opacity {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-fast {
+            animation: pulse-opacity 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+        .glitch-anim {
+            animation: glitch 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center overflow-hidden scanlines">
+
+    <!-- GAME CONTAINER -->
+    <div id="game-container" class="relative w-full max-w-2xl h-full max-h-[90vh] flex flex-col items-center">
+        
+        <!-- HEADER / HUD -->
+        <div class="w-full flex justify-between items-end px-4 py-2 border-b border-gray-800 bg-gray-900 bg-opacity-80 z-20">
+            <div id="player-indicator" class="text-xl font-bold flex items-center gap-2 text-[#00ff88] glow-text">
+                <i class="fas fa-user-secret"></i> <span>HACKER TURN</span>
+            </div>
+            <div class="flex gap-4 text-sm">
+                <div class="flex flex-col items-end">
+                    <span class="text-gray-500 text-xs">OBJECTIVES</span>
+                    <span id="hack-score" class="text-[#00ff88]">0/3 Hacked</span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-gray-500 text-xs">STRIKES</span>
+                    <span id="strike-score" class="text-[#ff3333]">0/2</span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="text-gray-500 text-xs">AP</span>
+                    <span id="ap-display" class="text-yellow-400 font-bold text-lg">3</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN BOARD AREA -->
+        <div class="relative flex-grow flex items-center justify-center p-2 w-full cyber-grid">
+            <div id="game-board" class="grid grid-cols-8 gap-1 bg-gray-900 p-2 border-2 border-gray-700 shadow-2xl relative">
+                <!-- Grid Cells Generated via JS -->
+            </div>
+        </div>
+
+        <!-- ACTION BAR -->
+        <div id="action-bar" class="w-full p-4 bg-gray-900 border-t border-gray-800 flex justify-between items-center z-20">
+            <!-- Dynamic Actions inserted here -->
+        </div>
+    </div>
+
+    <!-- INTERMISSION / TURN MASK OVERLAY -->
+    <div id="intermission-screen" class="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center hidden">
+        <h1 class="text-4xl font-bold mb-2 text-white glitch-anim">SECURE CHANNEL</h1>
+        <p class="text-gray-400 mb-8 text-center max-w-md px-4">Pass the device to the next player. Ensure the screen is hidden from the opponent.</p>
+        <div id="next-player-badge" class="px-6 py-3 rounded border-2 mb-8 text-xl font-bold flex items-center gap-3">
+            <!-- Icon and Name -->
+        </div>
+        <button onclick="startGamePhase()" class="px-8 py-4 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white font-bold rounded shadow-[0_0_15px_rgba(255,255,255,0.2)] transition-all transform hover:scale-105">
+            DECRYPT & START TURN
+        </button>
+    </div>
+
+    <!-- GAME OVER OVERLAY -->
+    <div id="game-over-screen" class="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center hidden">
+        <h1 id="winner-title" class="text-5xl font-bold mb-4 glow-text">HACKER WINS</h1>
+        <p id="winner-desc" class="text-gray-300 mb-8">The system has been compromised.</p>
+        <button onclick="resetGame()" class="px-6 py-2 border border-[#00ff88] text-[#00ff88] hover:bg-[#00ff88] hover:text-black transition-colors">
+            REBOOT SYSTEM
+        </button>
+    </div>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toast" class="absolute top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 px-6 py-3 rounded shadow-xl z-40 transition-opacity duration-500 opacity-0 pointer-events-none">
+        <span id="toast-msg" class="font-bold">Notification</span>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS ---
+        const GRID_SIZE = 8;
+        const ROLES = {
+            HACKER: 'hacker',
+            CORP: 'corp'
+        };
+
+        const TILES = {
+            EMPTY: 0,
+            WALL: 1,
+            TERMINAL: 2
+        };
+
+        // 8x8 Map Layout (1 = Wall, 2 = Terminal)
+        // Designed for chokepoints and hiding spots
+        const MAP_LAYOUT = [
+            [0, 0, 0, 1, 0, 0, 0, 2],
+            [0, 1, 0, 1, 0, 1, 1, 0],
+            [2, 1, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 1, 1, 1, 0],
+            [0, 1, 1, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0, 2],
+            [0, 1, 1, 0, 1, 1, 0, 0],
+            [2, 0, 0, 0, 0, 0, 0, 0]
+        ];
+
+        // --- STATE MANAGEMENT ---
+        let gameState = {
+            turn: 1,
+            currentPlayer: ROLES.HACKER,
+            ap: 3,
+            gameOver: false,
+            hacker: {
+                x: 0,
+                y: 0,
+                hackedCount: 0,
+                strikes: 0,
+                lastPos: {x:0, y:0},
+                sprintMode: false
+            },
+            corp: {
+                guards: [
+                    { id: 0, x: 7, y: 7, selected: false }, // Guard 1 starts bottom right
+                    { id: 1, x: 7, y: 0, selected: false }  // Guard 2 starts top right
+                ],
+                selectedGuardId: null
+            },
+            terminals: [], // Will store {x, y, hacked: boolean}
+            noiseTokens: [], // {x, y}
+            visionMask: [] // 2D array of booleans
+        };
+
+        // --- INITIALIZATION ---
+
+        function initGame() {
+            // Reset State
+            gameState.turn = 1;
+            gameState.currentPlayer = ROLES.HACKER;
+            gameState.ap = 3;
+            gameState.gameOver = false;
+            gameState.hacker = { x: 0, y: 0, hackedCount: 0, strikes: 0, lastPos: {x:0, y:0}, sprintMode: false };
+            gameState.corp.guards = [
+                { id: 0, x: 7, y: 7, selected: false },
+                { id: 1, x: 7, y: 0, selected: false }
+            ];
+            gameState.corp.selectedGuardId = null;
+            gameState.noiseTokens = [];
+            
+            // Initialize Terminals
+            gameState.terminals = [];
+            for(let y=0; y<GRID_SIZE; y++) {
+                for(let x=0; x<GRID_SIZE; x++) {
+                    if(MAP_LAYOUT[y][x] === TILES.TERMINAL) {
+                        gameState.terminals.push({ x, y, hacked: false });
+                    }
+                }
+            }
+
+            document.getElementById('game-over-screen').classList.add('hidden');
+            showIntermission();
+        }
+
+        function createBoardDOM() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            
+            // Responsive sizing
+            const containerW = Math.min(window.innerWidth - 32, 600);
+            const cellSize = Math.floor(containerW / 8) - 4;
+            
+            board.style.gridTemplateColumns = `repeat(${GRID_SIZE}, ${cellSize}px)`;
+            board.style.gridTemplateRows = `repeat(${GRID_SIZE}, ${cellSize}px)`;
+
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = document.createElement('div');
+                    cell.id = `cell-${x}-${y}`;
+                    cell.className = `cell w-[${cellSize}px] h-[${cellSize}px] flex items-center justify-center text-xl relative border border-gray-800 rounded-sm`;
+                    
+                    // Base Map Render
+                    if (MAP_LAYOUT[y][x] === TILES.WALL) {
+                        cell.classList.add('bg-gray-700', 'border-gray-600');
+                    } else {
+                        cell.classList.add('bg-gray-900/50');
+                        cell.onclick = () => handleCellClick(x, y);
+                    }
+
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        // --- CORE LOGIC ---
+
+        function checkWinConditions() {
+            if (gameState.hacker.hackedCount >= 3) {
+                endGame(ROLES.HACKER);
+                return true;
+            }
+            if (gameState.hacker.strikes >= 2) {
+                endGame(ROLES.CORP);
+                return true;
+            }
+            return false;
+        }
+
+        function endGame(winner) {
+            gameState.gameOver = true;
+            const screen = document.getElementById('game-over-screen');
+            const title = document.getElementById('winner-title');
+            const desc = document.getElementById('winner-desc');
+            
+            screen.classList.remove('hidden');
+            if (winner === ROLES.HACKER) {
+                title.innerText = "HACKER WINS";
+                title.style.color = "#00ff88";
+                desc.innerText = "All data terminals secured. Extraction complete.";
+            } else {
+                title.innerText = "CORP WINS";
+                title.style.color = "#ff3333";
+                desc.innerText = "Intruder neutralized. Facility secure.";
+            }
+        }
+
+        function switchTurn() {
+            if (checkWinConditions()) return;
+
+            // Prepare next turn
+            if (gameState.currentPlayer === ROLES.HACKER) {
+                gameState.currentPlayer = ROLES.CORP;
+                gameState.ap = 3;
+                // Deselect guard
+                gameState.corp.selectedGuardId = null;
+            } else {
+                gameState.currentPlayer = ROLES.HACKER;
+                gameState.ap = 3;
+                gameState.hacker.sprintMode = false;
+                // Clear noise tokens at start of Hacker turn (they last 1 corp turn)
+                gameState.noiseTokens = [];
+            }
+
+            showIntermission();
+        }
+
+        // --- ACTIONS ---
+
+        function handleCellClick(x, y) {
+            if (gameState.gameOver) return;
+
+            if (gameState.currentPlayer === ROLES.HACKER) {
+                handleHackerMove(x, y);
+            } else {
+                handleCorpClick(x, y);
+            }
+        }
+
+        function handleHackerMove(x, y) {
+            // Check if valid move
+            const dx = Math.abs(x - gameState.hacker.x);
+            const dy = Math.abs(y - gameState.hacker.y);
+            const dist = dx + dy;
+            const isWall = MAP_LAYOUT[y][x] === TILES.WALL;
+            
+            if (isWall) {
+                showToast("Cannot move through walls.", "text-red-500");
+                return;
+            }
+
+            let cost = 1;
+            let isSprint = false;
+
+            // Sprint Logic (Moves 2 tiles)
+            if (gameState.hacker.sprintMode) {
+                // Must be dist 2, straight line or L? 
+                // Let's simplify: Sprint allows moving 2 tiles in straight line or 1 tile but marked as sprint?
+                // Design says: Move 2 tiles. 
+                // Validation: Must be dist 2 AND straight line OR dist 1.
+                // Simplified: Sprint costs 1 AP but moves 2 tiles in straight line (jumping over 1).
+                // Or standard: Select mode, click adjacent -> move there. Click 2 away -> move there.
+                
+                // Let's implement: Click tile. Calculate path.
+                if (dist === 1) {
+                    cost = 1; // Just a normal move even if sprint toggled? No, toggle enforces sprint.
+                    isSprint = false; 
+                } else if (dist === 2 && (dx === 0 || dy === 0)) {
+                    // Straight line check middle tile for wall
+                    const mx = (x + gameState.hacker.x) / 2;
+                    const my = (y + gameState.hacker.y) / 2;
+                    if (MAP_LAYOUT[my][mx] === TILES.WALL) {
+                        showToast("Path blocked.", "text-red-500");
+                        return;
+                    }
+                    cost = 1; // Sprint ability costs 1 AP to move 2 squares according to brief?
+                    // Brief says: "Sprint (1 AP): Move 2 tiles".
+                    isSprint = true;
+                } else {
+                    return; // Invalid move
+                }
+            } else {
+                if (dist !== 1) return; // Only orthogonal 1 step
+            }
+
+            if (gameState.ap < cost) {
+                showToast("Not enough AP!", "text-red-500");
+                return;
+            }
+
+            // Execute Move
+            gameState.hacker.lastPos = { x: gameState.hacker.x, y: gameState.hacker.y };
+            gameState.hacker.x = x;
+            gameState.hacker.y = y;
+            gameState.ap -= cost;
+
+            // Add Noise if sprinted
+            if (isSprint) {
+                gameState.noiseTokens.push({ x: x, y: y }); // Noise appears at destination? Or path? Brief implies noise generated.
+                showToast("Sprinted! Noise generated.", "text-yellow-400");
+            }
+
+            // Check if walked into guard vision (End of move check)
+            if (checkForSpot()) {
+                // Sfx/Visual handled in checkForSpot
+            }
+
+            renderBoard();
+        }
+
+        function hackTerminal() {
+            if (gameState.currentPlayer !== ROLES.HACKER) return;
+            if (gameState.ap < 1) {
+                showToast("Not enough AP!", "text-red-500");
+                return;
+            }
+
+            // Check adjacency
+            const hx = gameState.hacker.x;
+            const hy = gameState.hacker.y;
+            
+            let targetTerminal = null;
+
+            gameState.terminals.forEach(t => {
+                const dist = Math.abs(t.x - hx) + Math.abs(t.y - hy);
+                if (dist === 1 && !t.hacked) {
+                    targetTerminal = t;
+                }
+            });
+
+            if (targetTerminal) {
+                targetTerminal.hacked = true;
+                gameState.hacker.hackedCount++;
+                gameState.ap -= 1;
+                showToast("TERMINAL HACKED!", "text-[#00ff88]");
+                checkWinConditions();
+                renderBoard();
+            } else {
+                showToast("No unhacked terminal adjacent.", "text-yellow-500");
+            }
+        }
+
+        function handleCorpClick(x, y) {
+            // Select Guard
+            const clickedGuard = gameState.corp.guards.find(g => g.x === x && g.y === y);
+            
+            if (clickedGuard) {
+                gameState.corp.selectedGuardId = clickedGuard.id;
+                renderBoard();
+                return;
+            }
+
+            // Move Selected Guard
+            if (gameState.corp.selectedGuardId !== null) {
+                const guard = gameState.corp.guards.find(g => g.id === gameState.corp.selectedGuardId);
+                const dx = Math.abs(x - guard.x);
+                const dy = Math.abs(y - guard.y);
+                const dist = dx + dy;
+                const isWall = MAP_LAYOUT[y][x] === TILES.WALL;
+                
+                // Prevent moving into other guard
+                const otherGuard = gameState.corp.guards.find(g => g.id !== guard.id && g.x === x && g.y === y);
+
+                if (dist === 1 && !isWall && !otherGuard) {
+                    if (gameState.ap < 1) {
+                        showToast("Not enough AP!", "text-red-500");
+                        return;
+                    }
+                    guard.x = x;
+                    guard.y = y;
+                    gameState.ap -= 1;
+                    
+                    if (checkForSpot()) {
+                        // Sfx
+                    }
+                    renderBoard();
+                }
+            }
+        }
+
+        // --- VISION & LOGIC ---
+
+        function calculateVision() {
+            // Returns 8x8 boolean grid. True = Visible to Corp.
+            let vis = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+
+            gameState.corp.guards.forEach(g => {
+                vis[g.y][g.x] = true; // See self
+                
+                // Raycast in 4 directions
+                const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
+                dirs.forEach(([dx, dy]) => {
+                    let cx = g.x + dx;
+                    let cy = g.y + dy;
+                    while (cx >= 0 && cx < GRID_SIZE && cy >= 0 && cy < GRID_SIZE) {
+                        if (MAP_LAYOUT[cy][cx] === TILES.WALL) {
+                            vis[cy][cx] = true; // See the wall face
+                            break; // Stop
+                        }
+                        vis[cy][cx] = true;
+                        cx += dx;
+                        cy += dy;
+                    }
+                });
+            });
+
+            return vis;
+        }
+
+        function checkForSpot() {
+            const vision = calculateVision();
+            const hx = gameState.hacker.x;
+            const hy = gameState.hacker.y;
+
+            if (vision[hy][hx]) {
+                gameState.hacker.strikes++;
+                showToast(`HACKER SPOTTED! Strike ${gameState.hacker.strikes}/2`, "text-red-600", 3000);
+                checkWinConditions();
+                return true;
+            }
+            return false;
+        }
+
+        // --- RENDERING ---
+
+        function showIntermission() {
+            const overlay = document.getElementById('intermission-screen');
+            const badge = document.getElementById('next-player-badge');
+            
+            overlay.classList.remove('hidden');
+            
+            if (gameState.currentPlayer === ROLES.HACKER) {
+                badge.className = "px-6 py-3 rounded border-2 mb-8 text-xl font-bold flex items-center gap-3 border-[#00ff88] text-[#00ff88] bg-[#003311]";
+                badge.innerHTML = '<i class="fas fa-user-secret"></i> HACKER';
+            } else {
+                badge.className = "px-6 py-3 rounded border-2 mb-8 text-xl font-bold flex items-center gap-3 border-[#ff3333] text-[#ff3333] bg-[#330000]";
+                badge.innerHTML = '<i class="fas fa-shield-alt"></i> CORP SECURITY';
+            }
+        }
+
+        function startGamePhase() {
+            document.getElementById('intermission-screen').classList.add('hidden');
+            updateHUD();
+            renderBoard();
+            renderActionBar();
+        }
+
+        function updateHUD() {
+            const pInd = document.getElementById('player-indicator');
+            const score = document.getElementById('hack-score');
+            const strikes = document.getElementById('strike-score');
+            const ap = document.getElementById('ap-display');
+
+            score.innerText = `${gameState.hacker.hackedCount}/3 Hacked`;
+            strikes.innerText = `${gameState.hacker.strikes}/2 Strikes`;
+            ap.innerText = gameState.ap;
+
+            if (gameState.currentPlayer === ROLES.HACKER) {
+                pInd.innerHTML = '<i class="fas fa-user-secret"></i> <span>HACKER TURN</span>';
+                pInd.className = "text-xl font-bold flex items-center gap-2 text-[#00ff88] glow-text";
+            } else {
+                pInd.innerHTML = '<i class="fas fa-shield-alt"></i> <span>CORP TURN</span>';
+                pInd.className = "text-xl font-bold flex items-center gap-2 text-[#ff3333] glow-text";
+            }
+        }
+
+        function renderActionBar() {
+            const bar = document.getElementById('action-bar');
+            bar.innerHTML = '';
+
+            if (gameState.currentPlayer === ROLES.HACKER) {
+                // Hack Button
+                const btnHack = document.createElement('button');
+                btnHack.className = `flex-1 py-3 mx-1 font-bold rounded border ${gameState.ap > 0 ? 'bg-[#00ff88]/20 border-[#00ff88] text-[#00ff88] hover:bg-[#00ff88]/40' : 'bg-gray-800 border-gray-600 text-gray-500'}`;
+                btnHack.innerHTML = '<i class="fas fa-terminal"></i> HACK (1 AP)';
+                btnHack.onclick = hackTerminal;
+                bar.appendChild(btnHack);
+
+                // Sprint Toggle
+                const btnSprint = document.createElement('button');
+                btnSprint.className = `flex-1 py-3 mx-1 font-bold rounded border transition-colors ${gameState.hacker.sprintMode ? 'bg-yellow-500/20 border-yellow-500 text-yellow-500' : 'bg-gray-800 border-gray-500 text-gray-400'}`;
+                btnSprint.innerHTML = gameState.hacker.sprintMode ? '<i class="fas fa-running"></i> SPRINT: ON (2 Tiles)' : '<i class="fas fa-walking"></i> SPRINT: OFF';
+                btnSprint.onclick = () => {
+                    gameState.hacker.sprintMode = !gameState.hacker.sprintMode;
+                    renderActionBar();
+                    renderBoard(); // Update move highlights potentially
+                };
+                bar.appendChild(btnSprint);
+
+            } else {
+                const info = document.createElement('div');
+                info.className = "flex-1 text-center text-gray-400 text-sm italic";
+                info.innerText = "Select a Guard (Red Shield) then tap an adjacent tile to move.";
+                bar.appendChild(info);
+            }
+
+            // End Turn Button
+            const btnEnd = document.createElement('button');
+            btnEnd.className = "ml-4 px-6 py-3 font-bold rounded border border-gray-500 text-white bg-gray-800 hover:bg-gray-700";
+            btnEnd.innerText = "END TURN";
+            btnEnd.onclick = switchTurn;
+            bar.appendChild(btnEnd);
+        }
+
+        function renderBoard() {
+            updateHUD();
+            
+            const vision = calculateVision();
+            const isHacker = gameState.currentPlayer === ROLES.HACKER;
+
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = document.getElementById(`cell-${x}-${y}`);
+                    cell.innerHTML = ''; // Clear content
+                    cell.className = `cell w-full h-full flex items-center justify-center text-xl relative border rounded-sm`;
+                    
+                    // Default Styles
+                    let bgColor = 'bg-gray-900/50';
+                    let borderColor = 'border-gray-800';
+                    let opacity = 'opacity-100';
+
+                    // --- VISIBILITY LAYER ---
+                    const inVision = vision[y][x];
+                    
+                    if (!isHacker && !inVision && MAP_LAYOUT[y][x] !== TILES.WALL) {
+                        // Fog of War for Corp
+                        bgColor = 'bg-black';
+                        borderColor = 'border-gray-900';
+                        cell.classList.add('bg-black', 'border-gray-900');
+                    } else {
+                        // Visible or Hacker View
+                        if (MAP_LAYOUT[y][x] === TILES.WALL) {
+                            bgColor = 'bg-gray-700';
+                            borderColor = 'border-gray-600';
+                        } else if (inVision && isHacker) {
+                            // Hacker sees danger zones
+                            bgColor = 'bg-red-900/20';
+                            borderColor = 'border-red-900/50';
+                        } else if (inVision && !isHacker) {
+                            // Corp sees view cones
+                            bgColor = 'bg-red-900/10';
+                            borderColor = 'border-gray-700';
+                        } else {
+                             // Hacker safe zones
+                             bgColor = 'bg-gray-900';
+                        }
+                    }
+
+                    cell.className = `cell w-full h-full flex items-center justify-center text-xl relative border rounded-sm ${bgColor} ${borderColor}`;
+
+
+                    // --- CONTENT LAYER ---
+
+                    // 1. Terminals
+                    const term = gameState.terminals.find(t => t.x === x && t.y === y);
+                    if (term) {
+                        const icon = document.createElement('i');
+                        icon.className = `fas fa-desktop z-10 ${term.hacked ? 'text-red-500' : 'text-blue-400 animate-pulse'}`;
+                        cell.appendChild(icon);
+                    }
+
+                    // 2. Guards
+                    const guard = gameState.corp.guards.find(g => g.x === x && g.y === y);
+                    if (guard) {
+                        // Guards always visible to both? Yes, Hacker has omni-vision.
+                        // Wait, if Hacker is playing, they see guards.
+                        // If Corp is playing, they see guards.
+                        const div = document.createElement('div');
+                        div.className = `w-4/5 h-4/5 rounded-full flex items-center justify-center text-white z-20 shadow-lg transition-transform ${guard.id === gameState.corp.selectedGuardId ? 'bg-red-500 scale-110 ring-2 ring-white' : 'bg-red-700'}`;
+                        div.innerHTML = '<i class="fas fa-shield-alt text-xs"></i>';
+                        cell.appendChild(div);
+                    }
+
+                    // 3. Hacker
+                    if (gameState.hacker.x === x && gameState.hacker.y === y) {
+                        // Hacker visible to Hacker.
+                        // Hacker visible to Corp ONLY if inVision
+                        if (isHacker || inVision) {
+                            const div = document.createElement('div');
+                            div.className = `w-4/5 h-4/5 rounded-full flex items-center justify-center text-black z-30 shadow-[0_0_10px_#00ff88] ${isHacker ? 'bg-[#00ff88]' : 'bg-[#00ff88] animate-ping'}`;
+                            div.innerHTML = '<i class="fas fa-user-secret text-xs"></i>';
+                            cell.appendChild(div);
+                        }
+                    }
+
+                    // 4. Noise Tokens (Corp View Only mainly, but Hacker sees their mistake)
+                    const noise = gameState.noiseTokens.find(n => n.x === x && n.y === y);
+                    if (noise && !isHacker && !inVision) {
+                        // If noise is in Fog of War, Corp should see it?
+                        // Usually Noise is "Heard". So yes, show noise icon even in fog.
+                         const div = document.createElement('div');
+                        div.className = "absolute inset-0 flex items-center justify-center text-yellow-500 z-10 animate-bounce";
+                        div.innerHTML = '<i class="fas fa-bolt"></i>';
+                        cell.appendChild(div);
+                    }
+                }
+            }
+        }
+
+        function showToast(msg, colorClass, duration = 2000) {
+            const toast = document.getElementById('toast');
+            const txt = document.getElementById('toast-msg');
+            txt.innerText = msg;
+            txt.className = `font-bold ${colorClass}`;
+            
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, duration);
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            createBoardDOM();
+            initGame();
+        };
+
+    </script>
+</body>
+</html>
