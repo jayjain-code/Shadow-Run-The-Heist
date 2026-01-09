@@ -9,7 +9,7 @@ One player is the Hacker, the other controls Corporate Security.
 - Turn-based, hidden information, tactical positioning
 
 ## 🕹 Play Now
-👉 
+👉 https://jayjain-code.github.io/Shadow-Run-The-Heist/
 
 ## 🧠 Design Goals
 - Asymmetric roles
