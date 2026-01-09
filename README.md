@@ -9,7 +9,7 @@ One player is the Hacker, the other controls Corporate Security.
 - Turn-based, hidden information, tactical positioning
 
 ## 🕹 Play Now
-👉 https://USERNAME.github.io/shadow-run/
+👉 
 
 ## 🧠 Design Goals
 - Asymmetric roles
